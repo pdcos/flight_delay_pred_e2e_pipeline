@@ -4,6 +4,8 @@ import requests
 import pyarrow as pa
 import pyarrow.dataset as ds
 from dotenv import load_dotenv
+from io import BytesIO
+
 
 from utils.s3_interface import S3Interface
 from utils.glue_catalog_interface import GlueCatalogInterface
@@ -42,9 +44,10 @@ class FlightDataETL:
             self.load_to_s3_and_register_glue()
             print(f"ETL completed successfully for {year}-{month:02d}.")
         except FileNotFoundError as e:
-            print(f"Data for {year}-{month:02d} is not available yet. Skipping. [{e}]")
+           print(f"Data for {year}-{month:02d} is not available yet. Skipping. [{e}]")
         except Exception as e:
             print(f"ETL failed for {year}-{month:02d}: {e}")
+
 
     def extract_data(self, year: int, month: int) -> None:
         self.year = year
@@ -62,7 +65,12 @@ class FlightDataETL:
         if self.dataframe is None:
             raise ValueError("Data not extracted")
 
+
         self.dataframe.rename(columns=self.column_name_map, inplace=True)
+        self.dataframe['di_code'] = self.dataframe['di_code'].astype(str)
+        self.dataframe['flight_number'] = self.dataframe['flight_number'].astype(str)
+        self.dataframe['justification'] = self.dataframe['justification'].astype(str)
+        self.dataframe['seat_count'] = self.dataframe['seat_count'].astype('Int64')  # 'Int64' para BIGINT
         self.dataframe["reference"] = pd.to_datetime(self.dataframe["reference"], format="%Y-%m-%d")
         self.dataframe["year"] = self.dataframe["reference"].dt.year
         self.dataframe["month"] = self.dataframe["reference"].dt.month
@@ -185,5 +193,5 @@ if __name__ == "__main__":
 
     scheduler = Scheduler(etl=etl, coldstart_date={"year": 2001, "month": 1})
 
-    scheduler.run()
-    #scheduler.full_load(init_date=(2025, 8), end_date=(2026, 2))
+    #scheduler.run()
+    scheduler.full_load(init_date=(2010, 1), end_date=(2025, 6))

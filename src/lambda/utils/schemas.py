@@ -15,7 +15,7 @@ vra_raw_schema = {
     "scheduled_arrival": "string",
     "actual_arrival": "string",
     "flight_status": "string",
-    "justification": "double",
+    "justification": "string",
     "reference": "timestamp",
     "departure_status": "string",
     "arrival_status": "string",
