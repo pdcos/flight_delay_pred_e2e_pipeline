@@ -121,45 +121,95 @@ class FlightDataETL:
         )
         print(f"Partitions {partitions} added to Glue table {self.glue_table_name}.")
 
-    def create_colname_typing_dict(self) -> dict:
-        """
-        Create a dictionary for column name typing.
-        """
-        return {
-            "icao_airline_code": "string",
-            "airline_name": "string",
-            "flight_number": "string",
-            "di_code": "string",
-            "line_type_code": "string",
-            "aircraft_model": "string",
-            "seat_count": "int",
-            "origin_airport_icao": "string",
-            "origin_airport_name": "string",
-            "scheduled_departure": "timestamp",
-            "actual_departure": "timestamp",
-            "destination_airport_icao": "string",
-            "destination_airport_name": "string",
-            "scheduled_arrival": "timestamp",
-            "actual_arrival": "timestamp",
-            "flight_status": "string",
-            "justification": "string",
-            "reference": "timestamp",
-            "departure_status": "string",
-            "arrival_status": "string",
-            "month": "int",
-            "year": "int",
-        }
 
 class Scheduler:
-    def __init__(self, etl: FlightDataETL):
-        self.etl = etl
+    def __init__(self, 
+                 etl: FlightDataETL):
 
-    def schedule(self, year: int, month: int) -> None:
-        self.etl.run(year, month)
+        self.etl = etl
+        self.glue_interface = GlueCatalogInterface()
+        self.database_name = etl.database_name
+        self.table_name = etl.glue_table_name
+
+        self.coldstart_date = {"year": 2001, "month": 1}
+
+    def check_table_exists(self):
+        if not self.glue_interface.check_table_exists(self.database_name, self.table_name):
+            print(f"Table {self.table_name} does not exist in database {self.database_name}.")
+            return False
+        return True
+    
+    def get_latest_partition(self):
+        latest_partition = self.glue_interface.get_latest_partition(self.database_name, self.table_name)
+        if latest_partition:
+            print(f"Latest partition: {latest_partition}")
+            return latest_partition
+        else:
+            print("No partitions found.")
+            return None
+    
+    def get_next_execution_date(self):
+        latest_partition = self.get_latest_partition()
+        if latest_partition:
+            year = latest_partition['year']
+            month = latest_partition['month']
+            if month == 12:
+                return year + 1, 1
+            else:
+                return year, month + 1
+        else:
+            return None, None
+        
+    def run(self):
+
+
+        month, year = None, None
+        
+        table_exists = self.check_table_exists()
+
+        if not table_exists:
+            print(f"Table {self.table_name} does not exist. Running ETL from coldstart date.")
+            year, month = self.coldstart_date['year'], self.coldstart_date['month']
+        else:
+            year, month = self.get_next_execution_date()
+            print(f"Next execution date: {year}-{month:02d}")
+
+        if year is not None and month is not None:
+            print(f"Running ETL for year {year} and month {month}.")
+            self.etl.run(year=year, month=month)
+
+        return
+    
+    def full_load(self, init_date, end_date):
+        """
+        Full load from init_date to end_date
+        """
+        start_year, start_month = init_date
+        end_year, end_month = end_date
+
+        for year in range(start_year, end_year + 1):
+            for month in range(1, 13):
+                if year == start_year and month < start_month:
+                    continue
+                if year == end_year and month > end_month:
+                    break
+                self.etl.run(year=year, month=month)
+
+
+
+
+
+
+
+
 
 if __name__ == "__main__":
+
     etl = FlightDataETL()
-    try:
-        etl.run(year=2023, month=3)
-    except Exception as error:
-        print(f"An error occurred during the ETL process: {error}")
+    scheduler = Scheduler(etl=etl)
+    #scheduler.run()
+    scheduler.full_load(init_date=(2022, 8), end_date=(2023, 2))    
+    # try:
+    #     etl.run(year=2023, month=1)
+    # except Exception as error:
+    #     print(f"An error occurred during the ETL process: {error}")
