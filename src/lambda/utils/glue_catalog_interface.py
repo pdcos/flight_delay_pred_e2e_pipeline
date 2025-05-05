@@ -188,7 +188,7 @@ class GlueCatalogInterface:
             PartitionInputList=partition_input_list
         )
 
-        print("Partições adicionadas com sucesso.")
+        print("Partitions added successfully.")
         return response
     
     def get_latest_partition(self, database_name, table_name):
